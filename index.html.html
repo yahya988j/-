@@ -30,7 +30,7 @@
         .pulse-text { color: var(--gold); margin-top: 20px; animation: pulse 1.5s infinite; font-weight: bold; }
         @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
-        /* تعديل: انيميشن شعار الشاهين الكبير عند التأكيد */
+        /* انيميشن شعار الشاهين الكبير عند التأكيد */
         #eagle-confirm { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--purple); z-index: 10001; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
         .confirm-logo { width: 200px; border-radius: 50%; border: 4px solid var(--gold); animation: scaleUp 0.5s ease-out; }
         @keyframes scaleUp { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -78,12 +78,26 @@
     </div>
 
     <div id="p-login" class="page active" style="justify-content:center; text-align:center;">
-        <img src="https://i.postimg.cc/3RmMjYNd/Whats-App-Image-2026-04-10-at-6-22-30-PM.jpg" width="130" style="border-radius:35px; border:3px solid var(--gold); margin-bottom:30px;">
-        <h2 style="color:var(--gold)">شاهين إكسبريس</h2>
-        <input type="text" id="uName" placeholder="الاسم الكامل">
-        <input type="tel" id="uPhone" placeholder="رقم الجوال">
-        <button class="btn-gold" onclick="login()">دخول الصقور 🦅</button>
-        <button onclick="login('dev')" style="background:none; border:none; color:#444; margin-top:20px; font-size:12px;">وضع المطور 🛠️</button>
+        <div style="display: flex; justify-content: center; width: 100%; margin-bottom: 30px;">
+            <img src="https://i.postimg.cc/3RmMjYNd/Whats-App-Image-2026-04-10-at-6-22-30-PM.jpg" width="130" style="border-radius:35px; border:3px solid var(--gold);">
+        </div>
+        <div id="login-form-ui">
+            <h2 style="color:var(--gold)" id="auth-title">تسجيل دخول صقر 🦅</h2>
+            <div id="register-fields" style="display: none;">
+                <input type="text" id="uName" placeholder="الاسم الكامل">
+                <input type="tel" id="uPhone" placeholder="رقم الجوال">
+            </div>
+            <input type="email" id="uEmail" placeholder="البريد الإلكتروني">
+            <input type="password" id="uPass" placeholder="كلمة السر">
+            <button class="btn-gold" id="auth-btn" onclick="loginUser()">دخول وإرسال رابط التفعيل</button>
+            <p style="margin-top:20px; font-size:13px; cursor:pointer; color:var(--gold);" onclick="toggleAuthMode()" id="toggle-text">ليس لديك حساب؟ إنشاء حساب</p>
+        </div>
+        <div id="verify-wait-ui" style="display:none;">
+            <i class="fas fa-envelope-open-text fa-4x" style="color:var(--gold); margin-bottom:20px;"></i>
+            <h2 style="color:var(--gold)">تحقق من بريدك!</h2>
+            <p id="verify-text" style="font-size:14px; line-height:1.6;">أرسلنا رابط التحقق إلى إيميلك.<br>اضغط على الرابط لتفعيل الدخول والموقع.</p>
+            <button class="btn-gold" style="margin-top:20px; background:transparent; border:1px solid var(--gold); color:var(--gold);" onclick="location.reload()">العودة للرئيسية</button>
+        </div>
     </div>
 
     <div id="p-home" class="page">
@@ -143,11 +157,8 @@
 </div>
 
 <script>
-    const data = [
-        { id: 1, name: "مطعم الملكي", fee: 10000, time: "30-45 دقيقة", img: "https://i.postimg.cc/3RmMjYNd/Whats-App-Image-2026-04-10-at-6-22-30-PM.jpg", menu: [{n:"وجبة شاهين", p:45000, img:"https://i.postimg.cc/3RmMjYNd/Whats-App-Image-2026-04-10-at-6-22-30-PM.jpg"}, {n:"برجر ملكي", p:25000, img:"https://i.postimg.cc/3RmMjYNd/Whats-App-Image-2026-04-10-at-6-22-30-PM.jpg"}] },
-        { id: 2, name: "شاورما الشاهين", fee: 8000, time: "20-30 دقيقة", img: "https://i.postimg.cc/3RmMjYNd/Whats-App-Image-2026-04-10-at-6-22-30-PM.jpg", menu: [{n:"شاورما عربي", p:30000, img:"https://i.postimg.cc/3RmMjYNd/Whats-App-Image-2026-04-10-at-6-22-30-PM.jpg"}] }
-    ];
-    let cart = [], currentResId = null, orderHistory = [], cancelInterval = null;
+    const data = [];
+    let cart = [], currentResId = null, orderHistory = [], cancelInterval = null, isLoginMode = true;
 
     function showNotify(msg, type = 'success') {
         const n = document.getElementById('in-app-notify');
@@ -158,21 +169,61 @@
         setTimeout(() => n.classList.remove('show'), 3000);
     }
 
+    function toggleAuthMode() {
+        isLoginMode = !isLoginMode;
+        document.getElementById('auth-title').innerText = isLoginMode ? "تسجيل دخول صقر 🦅" : "إنشاء حساب صقر 🦅";
+        document.getElementById('register-fields').style.display = isLoginMode ? "none" : "block";
+        document.getElementById('auth-btn').innerText = isLoginMode ? "دخول وإرسال رابط التفعيل" : "تسجيل وإرسال رابط التحقق";
+        document.getElementById('toggle-text').innerText = isLoginMode ? "ليس لديك حساب؟ إنشاء حساب" : "لديك حساب بالفعل؟ تسجيل دخول";
+        document.getElementById('auth-btn').setAttribute('onclick', isLoginMode ? 'loginUser()' : 'registerUser()');
+    }
+
+    function registerUser() {
+        const n = document.getElementById('uName').value;
+        const e = document.getElementById('uEmail').value;
+        const p = document.getElementById('uPass').value;
+        const ph = document.getElementById('uPhone').value;
+        if(!n || !e || !p || !ph) return showNotify("يرجى إكمال كافة الحقول يا صقر", "error");
+        
+        // محاكاة إرسال البيانات لقاعدة البيانات وإرسال إيميل التفعيل
+        console.log("Saving to Database:", { name: n, email: e, pass: p, phone: ph, status: "pending_verification" });
+        
+        document.getElementById('login-form-ui').style.display = 'none';
+        document.getElementById('verify-text').innerText = `يا صقر ${n}، أرسلنا رابط التفعيل إلى ${e}. اضغط عليه لتفعيل حسابك ورقمك ${ph}.`;
+        document.getElementById('verify-wait-ui').style.display = 'block';
+        showNotify("تم إرسال رابط التفعيل بنجاح 📧");
+    }
+
+    function loginUser() {
+        const e = document.getElementById('uEmail').value;
+        const p = document.getElementById('uPass').value;
+        if(!e || !p) return showNotify("يرجى إدخال البريد وكلمة السر", "error");
+        
+        // محاكاة البحث في قاعدة البيانات والتحقق من صحة البيانات
+        document.getElementById('login-form-ui').style.display = 'none';
+        document.getElementById('verify-text').innerText = `أهلاً بك مجدداً. تم إرسال رابط دخول آمن إلى ${e}. يرجى الضغط عليه للدخول.`;
+        document.getElementById('verify-wait-ui').style.display = 'block';
+        showNotify("تم إرسال رابط الدخول للإيميل 📧");
+    }
+
     function login(t) {
         if(t !== 'dev') {
             const n = document.getElementById('uName').value;
-            const p = document.getElementById('uPhone').value;
-            if(!n || !p) return showNotify("أدخل بياناتك يا صقر", "error");
+            const ph = document.getElementById('uPhone').value;
+            if(!n || !ph) return showNotify("أدخل بياناتك يا صقر", "error");
             document.getElementById('my-name').innerText = n;
-            document.getElementById('my-phone').innerText = p;
+            document.getElementById('my-phone').innerText = ph;
         }
         document.getElementById('p-login').style.display = 'none';
         document.getElementById('tab-bar').style.display = 'flex';
         renderRes(); nav('p-home');
-        showNotify("تم تسجيل الدخول بنجاح! أهلاً بك.");
     }
 
     function renderRes() {
+        if (data.length === 0) {
+            document.getElementById('res-list').innerHTML = "<p style='text-align:center; opacity:0.5; margin-top:20px;'>جاري تحميل المطاعم...</p>";
+            return;
+        }
         document.getElementById('res-list').innerHTML = data.map(r => `
             <div class="card res-card" onclick="openMenu(${r.id})">
                 <div class="flex-reverse">
