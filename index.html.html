@@ -5124,12 +5124,14 @@ setTimeout(() => {
                 // [PERF-FIX-1] استبعاد عمود restaurant_menu الثقيل من استعلام القائمة الرئيسية
                 // كان يُحمَّل لكل مطعم في كل مرة فقط لعرض بطاقة (اسم+شعار+سعر)، مما يُبطّئ فتح الصفحة بشكل واضح
                 // يُجلب المنيو الكامل فقط عند فتح مطعم محدد (عبر _fetchAndOpenMenu)
-                .select('id,name,logo,delivery_fee,open_time,close_time,is_locked,subscription_status,maps_url,branch,is_direct_contact,specialty_type,is_featured');
+                .select('id,name,logo,delivery_fee,open_time,close_time,is_locked,subscription_status,maps_url,branch,is_direct_contact,specialty_type,is_featured,active');
 
             if(error) throw error;
             if(dbData) {
                 // data تحتوي الكل للبحث في openMenu
-                const newData = dbData.filter(r => r.is_locked !== true);
+                // [BUGFIX-ROOT-CAUSE-DELETION] هذا هو السبب الحقيقي لعدم اختفاء المطعم المحذوف —
+                // العمود active لم يكن يُجلب أصلاً، والفلتر الوحيد كان يفحص is_locked فقط
+                const newData = dbData.filter(r => r.is_locked !== true && r.active !== false);
                 // ===== حماية ترتيب المطاعم: لا تُحدَّث القائمة إذا جاءت فارغة من السيرفر =====
                 // يمنع اختفاء المطاعم أو تغيّر مكانها في حالة خطأ مؤقت من السيرفر
                 if (newData.length > 0) {
@@ -5272,9 +5274,30 @@ setTimeout(() => {
     }
 
     function switchCategory(cat) {
-        // [FEATURE-SECTION-LOCK] لو القسم مقفول من الإدارة، امنع الدخول برسالة واضحة
+        // [BUGFIX-LOCKED-SECTION-FALLBACK] كان القسم المقفول يعرض توست بس بدون أي تبديل شاشة
+        // فعلي — يعني آخر قسم كان مفتوح (عادة المطاعم كقيمة افتراضية) يضل ظاهر، وكأنه "توجيه
+        // للمطاعم". الآن ننتقل فعليًا لتصميم "قريبًا" مكان القسم المطلوب بالضبط
         if (_isSectionLocked(cat)) {
-            siteNotify('🔒 هذا القسم مغلق حاليًا — قريبًا');
+            document.querySelectorAll('.m-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.category-view').forEach(v => v.classList.remove('active'));
+            const _tabIdx = { restaurants: 0, pharmacies: 1, flowers: 2, sweets: 3, cafe_caravan: 4, wassayni: 5, family: 6 }[cat];
+            const _tabs = document.querySelectorAll('.m-tab');
+            if (_tabIdx !== undefined && _tabs[_tabIdx]) _tabs[_tabIdx].classList.add('active');
+            let _lockedView = document.getElementById('view-locked-section');
+            if (!_lockedView) {
+                _lockedView = document.createElement('div');
+                _lockedView.id = 'view-locked-section';
+                _lockedView.className = 'category-view';
+                document.getElementById('p-home').appendChild(_lockedView);
+            }
+            _lockedView.innerHTML = `
+                <div style="text-align:center; padding:60px 20px;">
+                    <div style="font-size:48px; margin-bottom:14px;">🔒</div>
+                    <h2 style="color:var(--gold); font-size:20px; margin:0 0 8px;">قريبًا</h2>
+                    <p style="color:#aaa; font-size:12px;">قريبًا سيتم تفعيلها، انتظرونا ❤️</p>
+                </div>`;
+            _lockedView.classList.add('active');
+            siteNotify('🔒 قريبًا سيتم تفعيلها، انتظرونا ❤️');
             return;
         }
         // [FIX-PERF-CHAT-LEAK] تنظيف احتياطي لأي قناة دردشة لحظية عالقة لو غادر العميل الصفحة
@@ -11789,7 +11812,8 @@ setTimeout(() => {
         // شراكة ثابت — هلق تفحص specialty_type مباشرة، يشتغل صح لأي قسم جديد متل الكافيهات
         const { data } = await _supabase.from('restaurants_public')
             .select('*')
-            .eq('specialty_type', type);
+            .eq('specialty_type', type)
+            .neq('active', false);
         const filteredStores = data || [];
         if (loader) loader.style.display = 'none';
 
@@ -11806,14 +11830,20 @@ setTimeout(() => {
 
         storeListDiv.innerHTML = filteredStores.map(s => {
             const mapsUrl = s.maps_url || s.location_url || '';
+            // [BUGFIX-CAFE-REAL-MENU] الكافيهات يجب أن تفتح منيو حقيقي (تصفّح وطلب أصناف مباشرة)
+            // بالضبط متل المطاعم — مو نظام "تواصل مباشر" المستخدَم للورد والحلويات الخارجية
+            const _clickAction = (type === 'cafe_caravan')
+                ? `openMenu('${s.id}')`
+                : `orderFromSpecialtyStore('${s.id}','${s.specialty_type||type}')`;
+            const _actionHint = (type === 'cafe_caravan') ? 'اضغط لعرض المنيو والطلب 🦅' : 'اضغط للتنسيق والطلب المباشر 🦅';
             return `
-            <div class="card" onclick="orderFromSpecialtyStore('${s.id}','${s.specialty_type||type}')" style="cursor:pointer; padding: 12px; border: 2px solid ${borderColor}; background: ${bgColor};">
+            <div class="card" onclick="${_clickAction}" style="cursor:pointer; padding: 12px; border: 2px solid ${borderColor}; background: ${bgColor};">
                 <div class="flex-reverse">
                     <img src="${s.logo || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 fill=%22%232a1a2e%22/%3E%3Ctext x=%2250%22 y=%2258%22 font-size=%2240%22 text-anchor=%22middle%22%3E%F0%9F%8D%BD%EF%B8%8F%3C/text%3E%3C/svg%3E'}" width="55" height="55" style="border-radius:12px; border:2px solid ${borderColor};">
                     <div style="flex:1; text-align:right; margin-right:10px;">
                         <b style="font-size: 13px;">${s.name}</b>
                         <p style="margin:2px 0 0 0; font-size:10px; color:${borderColor};">${typeIcon}</p>
-                        <p style="margin:2px 0 0 0; font-size:10px; color:var(--gold);">اضغط للتنسيق والطلب المباشر 🦅</p>
+                        <p style="margin:2px 0 0 0; font-size:10px; color:var(--gold);">${_actionHint}</p>
                     </div>
                     ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" onclick="event.stopPropagation()" style="background:rgba(66,133,244,0.15); border:1px solid #4285F4; border-radius:8px; padding:5px 8px; color:#4285F4; font-size:9px; text-decoration:none; white-space:nowrap;"><i class="fas fa-map-marker-alt"></i> الخريطة</a>` : ''}
                     <i class="fas fa-chevron-left" style="color:${borderColor}; font-size:12px; margin-right:5px;"></i>
@@ -11853,7 +11883,8 @@ setTimeout(() => {
         const { data: stores, error } = await _supabase.from('restaurants_public')
             .select('*')
             .eq('branch', 'شريك خارجي')
-            .eq('contract', 'شريك حلويات وورود');
+            .eq('contract', 'شريك حلويات وورود')
+            .neq('active', false);
 
         loader.style.display = 'none';
 
