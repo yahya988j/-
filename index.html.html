@@ -8512,7 +8512,15 @@ setTimeout(() => {
                     showNotify('⚠️ تعذّر إرسال الطلب الآن بسبب ضعف الاتصال — سيُرسَل تلقائياً بمجرد عودة الإنترنت، لا تُغلق الصفحة الآن إن أمكن', 'error');
                 } catch(_queueErr) {
                     console.error('[FIX-OFFLINE-QUEUE] فشل حفظ الطلب في قائمة الانتظار المحلية أيضاً:', _queueErr);
-                    showNotify("تعذّر إرسال الطلب — تحقق من الاتصال وأعد المحاولة ❌", "error");
+                    // [BUGFIX-MISLEADING-CONNECTION-ERROR] كانت هذه الرسالة تلوم الاتصال دائماً حتى
+                    // لو السبب الحقيقي شيء آخر تماماً (RLS، قيد قاعدة بيانات، بيانات ناقصة). الآن
+                    // تُعرَض تفاصيل الخطأ الفعلي إن وُجدت، ليسهل التشخيص الحقيقي بدل تخمين المستخدم
+                    const _realErrMsg = retryError?.message || retryError?.error_description || retryError?.details || '';
+                    if (_realErrMsg && !_realErrMsg.toLowerCase().includes('fetch') && !_realErrMsg.toLowerCase().includes('network')) {
+                        showNotify('⚠️ تعذّر إرسال الطلب: ' + _realErrMsg, 'error');
+                    } else {
+                        showNotify("تعذّر إرسال الطلب — تحقق من الاتصال وأعد المحاولة ❌", "error");
+                    }
                 }
             }
         }
